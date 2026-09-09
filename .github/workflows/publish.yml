@@ -1,0 +1,107 @@
+name: publish
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: tag to publish
+        required: true
+
+permissions:
+  contents: write
+
+jobs:
+  lint:
+    uses: ./.github/workflows/lint.yml
+
+  test:
+    needs: lint
+    uses: ./.github/workflows/test.yml
+
+  release:
+    needs: test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: stable
+          cache: true
+
+      - name: resolve version
+        id: version
+        run: |
+          version="${GITHUB_REF_NAME}"
+          if [ "${GITHUB_EVENT_NAME}" = "workflow_dispatch" ]; then
+            version="${{ inputs.tag }}"
+          fi
+          echo "version=${version}" >> "${GITHUB_OUTPUT}"
+
+      - name: build and archive
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          set -euo pipefail
+          mkdir -p dist
+          for target in linux/amd64 linux/arm64 darwin/amd64 darwin/arm64 windows/amd64 windows/arm64; do
+            os="${target%/*}"
+            arch="${target#*/}"
+            name="yawn-${VERSION}-${os}-${arch}"
+            work="build/${name}"
+            mkdir -p "${work}"
+
+            binary="${work}/yawn"
+            [ "${os}" = "windows" ] && binary="${work}/yawn.exe"
+
+            GOOS="${os}" GOARCH="${arch}" CGO_ENABLED=0 \
+              go build -trimpath -ldflags "-s -w -X main.version=${VERSION}" -o "${binary}" ./cmd/yawn
+
+            cp LICENSE "${work}/" 2>/dev/null || true
+
+            # zip on windows, tar.gz everywhere else, which is what each
+            # platform's users expect to be able to open without extra tools
+            if [ "${os}" = "windows" ]; then
+              (cd build && zip -qr "../dist/${name}.zip" "${name}")
+            else
+              tar -czf "dist/${name}.tar.gz" -C build "${name}"
+            fi
+          done
+          (cd dist && sha256sum * > checksums.txt)
+          ls -la dist
+
+      - name: release notes
+        run: |
+          set -euo pipefail
+          previous="$(git describe --tags --abbrev=0 HEAD^ 2>/dev/null || true)"
+          {
+            echo "## Changes"
+            echo
+            if [ -n "${previous}" ]; then
+              git log --pretty='- %s' "${previous}..HEAD"
+            else
+              git log --pretty='- %s'
+            fi
+            echo
+            echo "## Install"
+            echo
+            echo '```'
+            echo "go install github.com/whiskydumb/yawn/cmd/yawn@${GITHUB_REF_NAME}"
+            echo '```'
+            echo
+            echo "Or download an archive below. Verify it with \`sha256sum -c checksums.txt\`."
+            echo
+            echo "yawn needs \`yt-dlp\` and \`ffmpeg\` on PATH."
+          } > notes.md
+          cat notes.md
+
+      - uses: softprops/action-gh-release@v2
+        with:
+          files: dist/*
+          body_path: notes.md
+          draft: false
+          generate_release_notes: false

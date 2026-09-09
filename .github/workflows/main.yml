@@ -1,0 +1,46 @@
+name: main
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  lint:
+    uses: ./.github/workflows/lint.yml
+
+  test:
+    needs: lint
+    uses: ./.github/workflows/test.yml
+
+  build:
+    needs: test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: stable
+          cache: true
+
+      - name: cross compile
+        run: |
+          set -euo pipefail
+          for target in linux/amd64 linux/arm64 darwin/amd64 darwin/arm64 windows/amd64 windows/arm64; do
+            os="${target%/*}"
+            arch="${target#*/}"
+            out="dist/yawn-${os}-${arch}"
+            [ "${os}" = "windows" ] && out="${out}.exe"
+            GOOS="${os}" GOARCH="${arch}" CGO_ENABLED=0 \
+              go build -ldflags "-s -w -X main.version=${GITHUB_SHA::7}" -o "${out}" ./cmd/yawn
+          done
+          ls -la dist
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: yawn-snapshot
+          path: dist/
+          retention-days: 7
