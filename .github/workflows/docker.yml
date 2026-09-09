@@ -58,7 +58,10 @@ jobs:
           tags: |
             type=semver,pattern={{version}}
             type=semver,pattern={{major}}.{{minor}}
-            type=raw,value=latest,enable={{is_default_branch}}
+            # latest has to move on a release and on the weekly rebuild.
+            # is_default_branch would not do it: a tag push is not a branch,
+            # so a fresh release would never become latest at all
+            type=raw,value=latest,enable=${{ github.ref_type == 'tag' || github.event_name == 'schedule' }}
             type=schedule,pattern=nightly
 
       - uses: docker/build-push-action@v6
