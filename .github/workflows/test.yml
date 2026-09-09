@@ -34,29 +34,45 @@ jobs:
         env:
           CGO_ENABLED: 1
 
+
+  # the s3 store talks to a real bucket rather than a mock, so it gets a real
+  # server. minio speaks the same protocol as R2, B2 and AWS.
   s3:
     runs-on: ubuntu-latest
-    services:
-      minio:
-        image: bitnami/minio:latest
-        env:
-          MINIO_ROOT_USER: yawntest
-          MINIO_ROOT_PASSWORD: yawntest123
-        ports:
-          - 9000:9000
-        options: >-
-          --health-cmd "mc ready local || curl -f http://localhost:9000/minio/health/live"
-          --health-interval 5s
-          --health-timeout 5s
-          --health-retries 10
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-go@v5
         with:
           go-version: stable
           cache: true
+
+      # started by hand rather than as a service container: the official image
+      # needs "server /data" as arguments, and a service container cannot be
+      # given a command at all
+      - name: start minio
+        run: |
+          set -euo pipefail
+          docker run -d --name minio -p 9000:9000 \
+            -e MINIO_ROOT_USER=yawntest \
+            -e MINIO_ROOT_PASSWORD=yawntest123 \
+            minio/minio:RELEASE.2025-09-07T16-13-09Z server /data
+          for _ in $(seq 1 30); do
+            if curl -fsS http://localhost:9000/minio/health/live >/dev/null; then
+              echo "minio is up"
+              exit 0
+            fi
+            sleep 1
+          done
+          echo "minio never became healthy" >&2
+          docker logs minio >&2
+          exit 1
+
       - run: go test ./internal/store/s3/ -count=1 -v
         env:
           YAWN_TEST_S3_ENDPOINT: http://localhost:9000
           YAWN_TEST_S3_ACCESS_KEY: yawntest
           YAWN_TEST_S3_SECRET_KEY: yawntest123
+
+      - name: minio logs
+        if: failure()
+        run: docker logs minio
