@@ -1,0 +1,37 @@
+# One pass of yawn sync, started by yawn.timer.
+#
+#   sudo cp deploy/yawn.{service,timer} /etc/systemd/system/
+#   sudo systemctl enable --now yawn.timer
+#   systemctl list-timers yawn.timer
+#   journalctl -u yawn.service -f
+
+[Unit]
+Description=yawn archive sync
+Documentation=https://github.com/whiskydumb/yawn
+# no point starting before the machine can resolve youtube
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+User=yawn
+Group=yawn
+WorkingDirectory=/var/lib/yawn
+ExecStart=/usr/local/bin/yawn sync
+
+# credentials come from the environment, not from the config file
+EnvironmentFile=-/etc/yawn/env
+
+# a pass that hangs must not block the next one forever
+TimeoutStartSec=12h
+
+# SIGINT rather than SIGTERM: that is the stop yawn handles gracefully, so
+# workers finish the current step and hand their tasks back
+KillSignal=SIGINT
+TimeoutStopSec=5m
+
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/var/lib/yawn

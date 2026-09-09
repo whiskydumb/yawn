@@ -1,0 +1,17 @@
+[Unit]
+Description=run yawn sync on a schedule
+
+[Timer]
+# once a day is plenty for a channel archive; youtube rate limits reward patience
+OnCalendar=*-*-* 04:00:00
+
+# spread the load and stop every machine hitting youtube on the same second
+RandomizedDelaySec=30m
+
+# a machine that was asleep at 04:00 still catches up on boot
+Persistent=true
+
+Unit=yawn.service
+
+[Install]
+WantedBy=timers.target
