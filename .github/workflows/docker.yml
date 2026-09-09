@@ -1,0 +1,83 @@
+name: docker
+
+on:
+  push:
+    tags: ["v*"]
+  schedule:
+    - cron: "0 5 * * 1"
+  workflow_dispatch:
+    inputs:
+      ytdlp_version:
+        description: yt-dlp version to bake in
+        required: false
+
+permissions:
+  contents: read
+  packages: write
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE: ${{ github.repository }}
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: resolve yt-dlp version
+        id: ytdlp
+        run: |
+          set -euo pipefail
+          version="${{ inputs.ytdlp_version }}"
+          if [ -z "${version}" ]; then
+            version="$(curl -fsSL https://api.github.com/repos/yt-dlp/yt-dlp/releases/latest \
+              | grep -oE '"tag_name": *"[^"]+"' | head -1 | cut -d'"' -f4)"
+          fi
+          if [ -z "${version}" ]; then
+            echo "could not resolve a yt-dlp version" >&2
+            exit 1
+          fi
+          echo "version=${version}" >> "${GITHUB_OUTPUT}"
+          echo "baking in yt-dlp ${version}"
+
+      - uses: docker/setup-qemu-action@v3
+      - uses: docker/setup-buildx-action@v3
+
+      - uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: tags
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.REGISTRY }}/${{ env.IMAGE }}
+          tags: |
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
+            type=raw,value=latest,enable={{is_default_branch}}
+            type=schedule,pattern=nightly
+
+      - uses: docker/build-push-action@v6
+        with:
+          context: .
+          platforms: linux/amd64,linux/arm64
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          build-args: |
+            VERSION=${{ github.ref_name }}
+            YTDLP_VERSION=${{ steps.ytdlp.outputs.version }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: smoke test the image
+        run: |
+          set -euo pipefail
+          tag="$(echo '${{ steps.meta.outputs.tags }}' | head -1)"
+          docker run --rm "${tag}" --version
+          docker run --rm --entrypoint yt-dlp "${tag}" --version
+          docker run --rm --entrypoint ffmpeg "${tag}" -version | head -1
