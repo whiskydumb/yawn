@@ -1,5 +1,5 @@
 [![ci](https://github.com/whiskydumb/yawn/actions/workflows/main.yml/badge.svg)](https://github.com/whiskydumb/yawn/actions/workflows/main.yml)
-[![go reference](https://pkg.go.dev/badge/github.com/whiskydumb/yawn.svg)](https://pkg.go.dev/github.com/whiskydumb/yawn)
+[![release](https://img.shields.io/github/v/release/whiskydumb/yawn)](https://github.com/whiskydumb/yawn/releases)
 [![license](https://img.shields.io/github/license/whiskydumb/yawn)](LICENSE)
 
 # yawn
