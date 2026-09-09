@@ -1,0 +1,13 @@
+*
+
+!go.mod
+!go.sum
+!cmd/
+!internal/
+
+**/client_secret*.json
+**/*token*.json
+**/*.db
+**/*.db-shm
+**/*.db-wal
+**/yawn.yaml

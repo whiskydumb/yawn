@@ -1,0 +1,52 @@
+# Running yawn on a server or a NAS.
+#
+# Everything lives in ./data: the config, the queue and the work directory.
+# The container is disposable, that directory is not.
+#
+#   docker compose run --rm yawn init
+#   $EDITOR data/yawn.yaml
+#   docker compose run --rm --service-ports yawn auth --port 8765
+#   docker compose run --rm yawn add https://www.youtube.com/@channel
+#   docker compose run --rm yawn sync
+#
+# The auth step needs --service-ports so the browser on your machine can reach
+# the redirect inside the container, and the config must use the same port:
+#   yawn auth --port 8765
+
+services:
+  yawn:
+    image: ghcr.io/whiskydumb/yawn:latest
+    # or build it yourself:
+    # build: .
+    container_name: yawn
+
+    # `sync` catches up on every source and exits, so there is nothing to
+    # restart. Scheduling belongs to whatever already runs on the host: cron,
+    # a systemd timer, or Task Scheduler. See deploy/ for ready made units.
+    #
+    #   0 4 * * *  docker compose -f /srv/yawn/compose.yaml run --rm yawn sync
+    #
+    # Do not reach for restart: unless-stopped here. It would spin sync in a
+    # tight loop with no pause between passes, which is a good way to get the
+    # address rate limited.
+    restart: "no"
+
+    volumes:
+      - ./data:/data
+
+    ports:
+      # only needed while authorising a store, harmless the rest of the time
+      - "127.0.0.1:8765:8765"
+
+    environment:
+      # credentials belong in the environment, never in the config file
+      - AWS_ACCESS_KEY_ID
+      - AWS_SECRET_ACCESS_KEY
+
+    # downloads are memory light but write a lot; give it room on a NAS
+    # deploy:
+    #   resources:
+    #     limits:
+    #       memory: 1g
+
+    command: ["sync"]
