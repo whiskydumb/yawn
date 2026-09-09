@@ -1,0 +1,62 @@
+name: test
+
+on:
+  workflow_call:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  unit:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: stable
+          cache: true
+      - run: go test ./...
+
+  race:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: stable
+          cache: true
+      - run: go test -race ./...
+        env:
+          CGO_ENABLED: 1
+
+  s3:
+    runs-on: ubuntu-latest
+    services:
+      minio:
+        image: bitnami/minio:latest
+        env:
+          MINIO_ROOT_USER: yawntest
+          MINIO_ROOT_PASSWORD: yawntest123
+        ports:
+          - 9000:9000
+        options: >-
+          --health-cmd "mc ready local || curl -f http://localhost:9000/minio/health/live"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: stable
+          cache: true
+      - run: go test ./internal/store/s3/ -count=1 -v
+        env:
+          YAWN_TEST_S3_ENDPOINT: http://localhost:9000
+          YAWN_TEST_S3_ACCESS_KEY: yawntest
+          YAWN_TEST_S3_SECRET_KEY: yawntest123
