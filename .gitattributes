@@ -1,0 +1,36 @@
+* text=auto eol=lf
+
+*.go        text eol=lf diff=golang
+*.sql       text eol=lf
+*.yml       text eol=lf
+*.yaml      text eol=lf
+*.md        text eol=lf
+*.json      text eol=lf
+*.txt       text eol=lf
+justfile    text eol=lf
+Makefile    text eol=lf
+LICENSE     text eol=lf
+.gitignore  text eol=lf
+
+*.sh        text eol=lf
+
+*.bat       text eol=crlf
+*.cmd       text eol=crlf
+*.ps1       text eol=crlf
+
+*.exe       binary
+*.dll       binary
+*.so        binary
+*.dylib     binary
+*.db        binary
+*.db-wal    binary
+*.db-shm    binary
+*.png       binary
+*.jpg       binary
+*.ico       binary
+*.mp4       binary
+*.webm      binary
+*.mkv       binary
+
+go.sum      linguist-generated=true -diff
+go.mod      linguist-generated=true

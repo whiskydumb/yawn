@@ -1,0 +1,13 @@
+/yawn
+/yawn.exe
+/downloads/
+/*.db
+/*.db-shm
+/*.db-wal
+/*.db.lock
+/yawn.yaml
+/dist/
+/.yawn-drive-token.json
+/*token*.json
+/client_secret*.json
+/*.log
